@@ -1,10 +1,5 @@
-// Importing Mongoose model and schema functionality
 import { model, Schema } from "mongoose"
 
-/* 
-   Defining a Mongoose schema for a payment object. The schema specifies the structure and
-   validation rules for the payment object.
-*/
 const paymentSchema = new Schema({
     razorpay_payment_id: {
         type: String,
@@ -19,11 +14,9 @@ const paymentSchema = new Schema({
         required: true
     }
 }, {
-    timestamps: true  // Automatically add timestamps (createdAt, updatedAt) to documents
+    timestamps: true  
 })
 
-// Creating a Mongoose model named 'Payment' using the defined schema
 const Payment = model('Payment', paymentSchema)
 
-// Exporting the 'Payment' model for use in other parts of the application
 export default Payment
