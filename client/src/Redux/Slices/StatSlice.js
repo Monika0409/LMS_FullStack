@@ -9,29 +9,30 @@ const initialState = {
 
 export const getStatsData = createAsyncThunk("stats/get", async () => {
     try {
-        const response = axiosInstance.get("/admin/stats/users");
+        const response = axiosInstance.get("/admin/stats");
         toast.promise(response, {
             loading: "Getting the stats...",
-            success: (data) => {
-                return data?.data?.message
-            },
+            success: (data) => data?.data?.message,
             error: "Failed to load data stats"
         });
+        console.log("Stats data:", response.data);
         return (await response).data;
     } catch(error) {
-        toast.error(error?.response?.data?.message);
+        toast.error(error?.response?.data?.message || "Someting went wrong");
+        throw error;
     }
 })
 
 const statSlice = createSlice({
-    name: "state",
+    name: "stat",
     initialState,
     reducers: {},
     extraReducers: (builder) => {
         builder.addCase(getStatsData.fulfilled, (state, action) => {
-            state.allUsersCount = action?.payload?.allUsersCount;
-            state.subscribedCount =  action?.payload?.subscribedUsersCount;
-        })
+            state.allUsersCount = action?.payload?.usersCount;
+            state.subscribedCount = action?.payload?.subscribedUser;
+        });
+        
     }
 });
 

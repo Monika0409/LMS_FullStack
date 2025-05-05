@@ -12,8 +12,8 @@ config()
 
 const app = express()
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json())
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({limit: '50mb'}));
 app.use(cors({
     origin: [process.env.FRONTEND_URL],
     credentials: true
@@ -24,6 +24,10 @@ app.use(morgan('dev'))
 app.use('/ping', function (req, res) {
     res.send('/pong')
 })
+
+app.get('/path/to/image', (req, res) => {
+    res.sendFile('path-to-your-image');
+});
 
 app.use('/api/v1/user', userRoutes)
 app.use('/api/v1/courses', courseRoutes)

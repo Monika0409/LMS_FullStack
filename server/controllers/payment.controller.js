@@ -3,6 +3,8 @@ import User from "../models/user.model.js";
 import { razorpay } from "../server.js";
 import AppError from "../utils/error.util.js"
 import crypto from 'crypto'
+import dotenv from 'dotenv'
+dotenv.config()
 
 const getRazorpayApiKey = async (req, res, next) => {
     try {
@@ -47,6 +49,7 @@ const buySubscription = async (req, res, next) => {
             subscription_id: subscription.id
         })
     } catch (e) {
+        console.error(e);
         return next(new AppError(e.message, 500))
     }
 }
@@ -89,7 +92,7 @@ const verifySubscription = async (req, res, next) => {
         })
 
     } catch (e) {
-        return next(new AppError(e, 500))
+        return next(new AppError(e.message, 500))
     }
 }
 

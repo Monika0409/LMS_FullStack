@@ -16,7 +16,7 @@ export const getAllCourses = createAsyncThunk("/course/get", async () => {
             error: "Failed to get the courses",
         });
 
-        return (await response).data.courses;
+        return (await response).data.course;
     } catch(error) {
         toast.error(error?.response?.data?.message);
     }
@@ -60,6 +60,29 @@ export const createNewCourse = createAsyncThunk("/course/create", async (data) =
     }
 });
 
+export const updateCourse = createAsyncThunk("/course/update", async ({ id, data }) => {
+    try {
+        const formData = new FormData();
+        formData.append("title", data?.title);
+        formData.append("description", data?.description);
+        formData.append("category", data?.category);
+        formData.append("createdBy", data?.createdBy);
+        if (data?.thumbnail) formData.append("thumbnail", data?.thumbnail);
+
+        const response = axiosInstance.put(`/courses/${id}`, formData);
+
+        toast.promise(response, {
+            loading: "Updating course...",
+            success: "Course updated successfully",
+            error: "Failed to update course",
+        });
+
+        return (await response).data.course;
+    } catch (error) {
+        toast.error(error?.response?.data?.message);
+    }
+});
+
 const courseSlice = createSlice({
     name: "courses",
     initialState,
@@ -69,6 +92,17 @@ const courseSlice = createSlice({
             if(action.payload) {
                 state.courseData = [...action.payload];
             }
+        })
+        .addCase(updateCourse.fulfilled, (state, action) => {
+            if (action.payload) {
+                state.courseData = state.courseData.map(course =>
+                    course._id === action.payload._id ? action.payload : course
+                );
+            }
+        })
+        .addCase(deleteCourse.fulfilled, (state, action) => {
+            const deletedId = action.meta.arg; // we passed id to the thunk
+            state.courseData = state.courseData.filter(course => course._id !== deletedId);
         })
     }
 });

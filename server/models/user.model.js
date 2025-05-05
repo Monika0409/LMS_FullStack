@@ -1,7 +1,7 @@
-import { model, Schema } from 'mongoose'
-import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
-import crypto from 'crypto'
+import { model, Schema } from 'mongoose';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 const userSchema = new Schema({
     role: {
@@ -11,7 +11,7 @@ const userSchema = new Schema({
     },
     fullName: {
         type: String,
-        required: [true, 'Name is Required'],
+        required: [true, 'Name is required'],
         minLength: [3, 'Name must be more than 3 characters'],
         maxLength: [30, 'Name should not be more than 30 characters'],
         lowercase: true,
@@ -28,13 +28,7 @@ const userSchema = new Schema({
     password: {
         type: String,
         required: [true, 'Password is required'],
-        minLength: [8, 'password must be at least 8 character'],
-        select: false
-    },
-    confirmPassword: {
-        type: 'String',
-        required: [true, 'Confirm Password is required'],
-        trim: true,
+        minLength: [8, 'Password must be at least 8 characters'],
         select: false
     },
     avatar: {
@@ -51,49 +45,53 @@ const userSchema = new Schema({
         id: String,
         status: String,
     }
-
 }, { timestamps: true });
 
-
+// Hash password before saving
 userSchema.pre('save', async function (next) {
-    if (!this.isModified('password') || !this.isModified('confirmPassword')) {
-        return next()
+    if (!this.isModified('password')) {
+        return next();
     }
-    this.password = await bcrypt.hash(this.password, 10)
-    this.confirmPassword = await bcrypt.hash(this.confirmPassword, 10)
-})
+    this.password = await bcrypt.hash(this.password, 10);
+    next();
+});
 
-
+// Custom methods
 userSchema.methods = {
 
     generateJWTToken: async function () {
         return await jwt.sign(
             {
-                id: this._id, email: this.email, subscription: this.subscription, role: this.role
+                id: this._id,
+                email: this.email,
+                subscription: this.subscription,
+                role: this.role
             },
             process.env.JWT_SECRET,
             {
                 expiresIn: process.env.JWT_EXPIRY
             }
-        )
+        );
     },
+
     comparePassword: async function (plainTextPassword) {
-        return await bcrypt.compare(plainTextPassword, this.password)
+        return await bcrypt.compare(plainTextPassword, this.password);
     },
+
     generatePasswordResetToken: async function () {
-        const resetToken = crypto.randomBytes(20).toString('hex')
+        const resetToken = crypto.randomBytes(20).toString('hex');
 
         this.forgetPasswordToken = crypto
             .createHash('sha256')
             .update(resetToken)
             .digest('hex');
-        this.forgetPasswordExpiry = Date.now() + 15 * 60 * 1000
+
+        this.forgetPasswordExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
 
         return resetToken;
     }
-}
+};
 
-const User = model('User', userSchema)
-
+const User = model('User', userSchema);
 
 export default User;

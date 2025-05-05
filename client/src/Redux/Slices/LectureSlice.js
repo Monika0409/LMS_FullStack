@@ -29,30 +29,62 @@ export const addCourseLecture = createAsyncThunk("/course/lecture/add", async (d
         formData.append("title", data.title);
         formData.append("description", data.description);
 
-        const response = axiosInstance.post(`/courses/${data.id}`, formData);
-        toast.promise(response, {
-            loading: "adding course lecture",
-            success: "Lecture added successfully",
-            error: "Failed to add the lectures"
+        const responsePromise = axiosInstance.post(`/courses/${data.id}`, formData, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+            withCredentials: true, // if using cookies/sessions
         });
-        return (await response).data;
+
+        const response = await toast.promise(responsePromise, {
+            loading: "Adding course lecture...",
+            success: "Lecture added successfully!",
+            error: "Failed to add the lecture",
+        });
+
+        return response.data;
+
     } catch(error) {
         toast.error(error?.response?.data?.message);
+        throw error;
     }
 });
 
 export const deleteCourseLecture = createAsyncThunk("/course/lecture/delete", async (data) => {
     try {
-
-        const response = axiosInstance.delete(`/courses?courseId=${data.courseId}&lectureId=${data.lectureId}`);
+        const response = axiosInstance.delete(`/courses/${data.courseId}/lecture/${data.lectureId}`);
         toast.promise(response, {
-            loading: "deleting course lecture",
-            success: "Lecture deleted successfully",
-            error: "Failed to delete the lectures"
+            loading: "Deleting course lecture...",
+            success: "Lecture deleted successfully!",
+            error: "Failed to delete the lecture.",
         });
         return (await response).data;
-    } catch(error) {
-        toast.error(error?.response?.data?.message);
+    } catch (error) {
+        toast.error(error?.response?.data?.message || "Something went wrong");
+    }
+});
+
+export const updateCourseLecture = createAsyncThunk("/course/lecture/update", async (data) => {
+    try {
+        const formData = new FormData();
+        formData.append("title", data.title);
+        formData.append("description", data.description);
+        if (data.lecture) {
+            formData.append("lecture", data.lecture); // new video (optional)
+        }
+
+        const response = axiosInstance.put(`/courses/${data.courseId}/lecture/${data.lectureId}`, formData);
+        
+        toast.promise(response, {
+            loading: "Updating course lecture...",
+            success: "Lecture updated successfully!",
+            error: "Failed to update the lecture",
+        });
+
+        return (await response).data;
+
+    } catch (error) {
+        toast.error(error?.response?.data?.message || "Something went wrong");
     }
 });
 

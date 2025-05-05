@@ -1,33 +1,34 @@
-import multer from 'multer'
-import path from 'path'
+import multer from 'multer';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
+const storage = multer.diskStorage({
+    destination: 'uploads/',
+    filename: (_req, file, cb) => {
+        const uniqueSuffix = `${uuidv4()}${path.extname(file.originalname)}`;
+        cb(null, uniqueSuffix);
+    }
+});
+
+const fileFilter = (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (
+        ext !== ".jpg" &&
+        ext !== ".jpeg" &&
+        ext !== ".png" &&
+        ext !== ".webp" &&
+        ext !== ".mp4"
+    ) {
+        cb(new Error(`Unsupported file type! ${ext}`), false);
+        return;
+    }
+    cb(null, true);
+};
 
 const upload = multer({
-    dest: 'uploads/',
-    limits: { fileSize: 50 * 1024 * 1024 },
-    storage: multer.diskStorage({
-        destination: 'uploads/',
-        filename: (_req, file, cb) => {
-            cb(null, file.originalname)
-        }
-    }),
-    fileFilter: (_req, file, cb) => {
-        let ext = path.extname(file.originalname)
+    storage,
+    limits: { fileSize: 500 * 1024 * 1024 },
+    fileFilter,
+});
 
-        if (
-            ext !== ".jpg" &&
-            ext !== ".jpeg" &&
-            ext !== ".webp" &&
-            ext !== ".mp4" &&
-            ext !== ".png"
-        ) {
-            cb(new Error(`Unsupported file type! ${ext}`), false)
-            return
-        }
-        cb(null, true)
-    }
-})
-
-
-
-export default upload
+export default upload;

@@ -5,6 +5,7 @@ import fs from 'fs/promises'
 import bcrypt from 'bcryptjs'
 import sendEmail from "../utils/sendEmail.js"
 import crypto from 'crypto'
+import validator from 'validator';
 
 const cookieOptions = {
     maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -14,119 +15,111 @@ const cookieOptions = {
 }
 
 const register = async (req, res, next) => {
-
     try {
-        const { fullName, email, password, confirmPassword} = req.body
+        const { fullName, email, password, role } = req.body; // role is coming
 
-        if (!fullName || !email || !password || !confirmPassword) {
-            return next(new AppError('All Fields are required', 400))
+        if (!fullName || !email || !password) {
+            return next(new AppError('All fields are required', 400));
         }
 
-        const userExist = await User.findOne({ fullName })
+        const userExist = await User.findOne({ email });
         if (userExist) {
-            return next(new AppError('UserName already exists', 409))
-        }
- 
-        const uniqueEmail = await User.findOne({ email })
-        if (uniqueEmail) {
-            return next(new AppError('Email is already registered', 400))
+            return next(new AppError('Email already registered', 409));
         }
 
         const user = await User.create({
             fullName,
             email,
             password,
-            confirmPassword,
+            role: role || 'USER', // 👈 if no role, default to USER
             avatar: {
                 publicId: '',
                 secure_url: 'https://res.cloudinary.com/dvg8cjdil/image/upload/apj.jpg'
             }
-        })
-
-        if (!user) {
-            return next(new AppError('User Registration Failed!, please try again', 400))
-        }
+        });
 
         if (req.file) {
             try {
-            
                 const result = await cloudinary.v2.uploader.upload(req.file.path, {
                     folder: 'lms',
                     width: 250,
                     height: 250,
                     gravity: 'faces',
                     crop: 'fill',
-                })
-    
-                if (result) {
-                    user.avatar.publicId = result.public_id
-                    user.avatar.secure_url = result.secure_url
-                    //fs.rm(`uploads/${req.file.filename}`)
-                }
-            }
-            catch (err) {
-                return next(new AppError('File can not get uploaded', 500))
+                });
+                user.avatar.publicId = result.public_id;
+                user.avatar.secure_url = result.secure_url;
+            } catch (err) {
+                return next(new AppError('Avatar upload failed', 500));
             }
         }
 
-        const token = await user.generateJWTToken()
-        res.cookie('token', token, cookieOptions)
+        await user.save(); // Save updated avatar if uploaded
+        const token = await user.generateJWTToken();
+        res.cookie('token', token, cookieOptions);
 
-        if (password === confirmPassword) {
-            await user.save()
-            user.password = undefined
-            user.confirmPassword = undefined
-            res.status(201).json({
-                success: true,
-                message: 'User registered Successfully',
-                user
-            })
-        }
-        else {
-            return next(new AppError('Password and Confirm Password must be same', 400))
-        }
+        user.password = undefined;
+
+        res.status(201).json({
+            success: true,
+            message: 'User registered successfully',
+            user: {
+                _id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                avatar: user.avatar,
+                role: user.role,    // 👈 sending role back
+            }
+        });
 
     } catch (err) {
-        return next(new AppError(err.message, 500))
+        return next(new AppError(err.message, 500));
     }
-
-
-}
+};
 
 
 const login = async (req, res, next) => {
     try {
-        
-        const { email, password } = req.body
+        const { email, password } = req.body;
 
         if (!email || !password) {
-            return next(new AppError('All field are required', 400))
+            return next(new AppError('Email and Password are required', 400));
         }
 
-        const user = await User.findOne({
-            email
-        }).select('+password')
+        const user = await User.findOne({ email }).select('+password');
 
-        if (!user || !user.comparePassword(password)) {
-            return next(new AppError('Email or password does not match', 400))
+        if (!user) {
+            return next(new AppError('Invalid Email or Password', 401));
         }
 
-        const token = await user.generateJWTToken()
+        const isMatch = await user.comparePassword(password);
+
+        if (!isMatch) {
+            return next(new AppError('Invalid Email or Password', 401));
+        }
+
+        const token = await user.generateJWTToken();
+        res.cookie('token', token, cookieOptions);
+
         user.password = undefined;
-        res.cookie('token', token, cookieOptions)
 
         res.status(200).json({
             success: true,
-            message: 'User Loggedin Successfully!',
-            user
-        })
+            message: 'Logged in successfully',
+            user: {
+                _id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                avatar: user.avatar,
+                role: user.role,  // 👈 send role to frontend after login
+            }
+        });
 
+    } catch (err) {
+        return next(new AppError(err.message, 500));
     }
-    catch (err) {
-        return next(new AppError(err.message, 500))
-    }
+};
 
-}
 
 const logout = (req, res) => {
     try {
@@ -240,98 +233,75 @@ const resetPassword = async (req, res, next) => {
 
 const changePassword = async (req, res, next) => {
     try {
-        const { oldPassword, newPassword } = req.body
-        const { id } = req.user
+        const { oldPassword, newPassword } = req.body;
 
         if (!oldPassword || !newPassword) {
-            return next(new AppError('All fields are required', 400))
+            return res.status(400).json({ success: false, message: "Both old and new password are required." });
         }
 
-        if (oldPassword === newPassword) {
-            return next(new AppError('New password is same as old password', 400))
-        }
-
-        const user = await User.findById(id).select('+password')
+        const user = await User.findById(req.user._id).select("+password");
 
         if (!user) {
-            return next(new AppError('User does not exist', 400))
+            return res.status(404).json({ success: false, message: "User not found." });
         }
 
-        const passwordValid = await user.comparePassword(oldPassword)
+        const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
 
-        if (!passwordValid) {
-            return next(new AppError('Old Password is wrong', 400))
+        if (!isPasswordValid) {
+            return res.status(400).json({ success: false, message: "Old password is incorrect." });
         }
 
-        user.password = await bcrypt.hash(newPassword, 10)
-        await user.save()
+        user.password = newPassword;
+        await user.save();
 
-        user.password = undefined
+        res.status(200).json({ success: true, message: "Password changed successfully!" });
 
-        res.status(200).json({
-            status: true,
-            message: 'Password Changed successfully'
-        })
+    } catch (error) {
+        console.error("Error changing password", error.message);
+        res.status(500).json({ success: false, message: "Internal server error." });
     }
-    catch (e) {
-        return next(new AppError(e.message, 500))
-    }
-
 }
 
-const updateUser = async (req, res, next) => {
+const updateUser = async (req, res, next) => { 
     try {
-        const { fullName } = req.body
-        const { id } = req.user.id
-
-        const user = await User.findById(id)
-
+        const { id } = req.params;
+        const { fullName } = req.body;
+    
+        const user = await User.findById(id);
+    
         if (!user) {
-            return next(new AppError('User does not exist', 400))
+          return res.status(404).json({ success: false, message: "User not found" });
         }
-
-        if (req.fullName) {
-            user.fullName = await fullName;
-        }
-
+    
+        if (fullName) user.fullName = fullName;
+    
         if (req.file) {
-            if (user.avatar.publicId) {
-                await cloudinary.v2.uploader.destroy(user.avatar.publicId)
-
-            }
-            try {
-                const result = await cloudinary.v2.uploader.upload(req.file.path, {
-                    folder: 'lms',
-                    width: 250,
-                    height: 250,
-                    gravity: 'faces',
-                    crop: 'fill',
-                })
-                console.log(result)
-                
-                if (result) {
-                    user.avatar.publicId = result.public_id
-                    user.avatar.secure_url = result.secure_url
-
-                    fs.rm(`uploads/${req.file.filename}`)
-                }
-            }
-            catch (err) {
-                return next(new AppError('File can not get uploaded', 500))
-            }
+          // Delete old avatar if exists
+          if (user.avatar && user.avatar.url) {
+            fs.unlink(user.avatar.url, (err) => {
+              if (err) console.error("Failed to delete old avatar:", err);
+            });
+          }
+    
+          // Update new avatar
+          user.avatar = {
+            public_id: req.file.filename,
+            url: req.file.path.replace(/\\/g, "/"),
+          };
         }
-
-        await user.save()
-
+    
+        await user.save();
+    
         res.status(200).json({
-            success: true,
-            message: 'User Detail updated successfully'
-        })
-    }
-    catch (e) {
-        return next(new AppError(e.message, 500))
-    }
-
+          success: true,
+          message: "Profile updated successfully",
+          user,
+        });
+    
+      } catch (error) {
+        console.error("Update User Error:", error);
+        res.status(500).json({ success: false, message: "Failed to update profile", error: error.message });
+      }
 }
 
 
